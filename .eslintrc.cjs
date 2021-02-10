@@ -18,6 +18,6 @@ module.exports = {
   ],
   rules: {
     indent: ['error', 2],
-    semi: ['error', 'always'],
+    semi: ['error', 'never'],
   }
-};
+}
