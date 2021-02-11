@@ -35,9 +35,6 @@ export const unprepare = async (statement: mssql.PreparedStatement): Promise<voi
 }
 
 export const commit = async (): Promise<void> => {
-  for (const statement of statements) {
-    await unprepare(statement)
-  }
   await transaction.commit()
 }
 
@@ -45,17 +42,24 @@ export const rollback = async (): Promise<void> => {
   for (const statement of statements) {
     await unprepare(statement)
   }
+  if (typeof transaction == 'undefined') return
   await transaction.rollback()
 }
 
-// Application specific code
+const createStatement = (): mssql.PreparedStatement => {
+  const statement = new mssql.PreparedStatement(transaction)
+  statements.push(statement)
+  return statement
+}
+
+// Application specific code below
 
 export const clearMergeFlag = async (): Promise<void> => {
-  await transaction.request().query('UPDATE [dbo].[TimeTools_Manager] SET [merged] = 0')
+  await transaction.request().query('UPDATE [dbo].[TimeTools_Manager] SET [isMerged] = 0')
 }
 
 export const removeUnmerged = async (): Promise<void> => {
-  await transaction.request().query('DELETE FROM [dbo].[TimeTools_Manager] WHERE [merged] = 0')
+  await transaction.request().query('DELETE FROM [dbo].[TimeTools_Manager] WHERE [isMerged] = 0')
 }
 
 export interface UserManagerRow {
@@ -65,11 +69,10 @@ export interface UserManagerRow {
   manager: string
   managerEmail: string
   managerEmployeeID: string
-  merged?: number
 }
 
 export const prepareMergeUserManager = async (): Promise<mssql.PreparedStatement> => {
-  const statement = new mssql.PreparedStatement(transaction)
+  const statement = createStatement()
 
   statement.input('user', mssql.VarChar(100))
   statement.input('userEmail', mssql.VarChar(50))
@@ -77,20 +80,37 @@ export const prepareMergeUserManager = async (): Promise<mssql.PreparedStatement
   statement.input('manager', mssql.VarChar(100))
   statement.input('managerEmail', mssql.VarChar(50))
   statement.input('managerEmployeeID', mssql.Char(10))
-  statement.input('merged', mssql.SmallInt)
 
   await statement.prepare(`
-    INSERT INTO[dbo].[TimeTools_Manager]
-    VALUES (
-        @user,
-        @userEmail,
-        @employeeID,
-        @manager,
-        @managerEmail,
-        @managerEmployeeID,
-        @merged
-    )
+    MERGE [dbo].[TimeTools_Manager] WITH (HOLDLOCK) AS TARGET
+    USING (
+      SELECT
+        @user AS [user],
+        @userEmail AS [userEmail],
+        @employeeID AS [employeeID],
+        @manager AS [manager],
+        @managerEmail AS [managerEmail],
+        @managerEmployeeID AS [managerEmployeeID]
+    ) AS SOURCE
+    ON TARGET.[employeeID] = SOURCE.[employeeID]
+    WHEN MATCHED THEN UPDATE
+    SET
+        TARGET.[user] = SOURCE.[user],
+        TARGET.[userEmail] = SOURCE.[userEmail],
+        TARGET.[manager] = SOURCE.[manager],
+        TARGET.[managerEmail] = SOURCE.[managerEmail],
+        TARGET.[managerEmployeeID] = SOURCE.[managerEmployeeID],
+        TARGET.[isMerged] = 1
+    WHEN NOT MATCHED BY TARGET THEN INSERT
+    VALUES(
+        SOURCE.[user],
+        SOURCE.[userEmail],
+        SOURCE.[employeeID],
+        SOURCE.[manager],
+        SOURCE.[managerEmail],
+        SOURCE.[managerEmployeeID],
+        1 -- isMerged
+    );
   `)
-  statements.push(statement)
   return statement
 }

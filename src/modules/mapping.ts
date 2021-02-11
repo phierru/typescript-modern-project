@@ -1,4 +1,4 @@
-import { UserManager } from './ad' 
+import { UserManager } from './ad'
 import { UserManagerRow } from './database'
 
 export const mapUserManager = (userManager: UserManager): UserManagerRow => {
@@ -9,6 +9,5 @@ export const mapUserManager = (userManager: UserManager): UserManagerRow => {
     manager: userManager.managerName,
     managerEmail: userManager.managerMail,
     managerEmployeeID: userManager.managerEmployeeId,
-    merged: 1,
   }
 }

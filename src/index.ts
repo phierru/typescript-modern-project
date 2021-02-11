@@ -14,15 +14,15 @@ import {
 } from './modules/database'
 
 try {
-  const usersManagers: UserManager[] = await fetchUsersManagers() 
-
   await connect()
   await begin()
+  
+  const usersManagers: UserManager[] = await fetchUsersManagers() 
 
   await clearMergeFlag()
   const mergeUserManager = await prepareMergeUserManager()
 
-  for (const userManager of usersManagers.filter(userManager => userManager.userEmployeeId != '71597')) {
+  for (const userManager of usersManagers.filter(userManager => userManager.userEmployeeId != '71597')) { //TODO: remove filter
     await mergeUserManager.execute(mapUserManager(userManager))
   }
   await unprepare(mergeUserManager)
